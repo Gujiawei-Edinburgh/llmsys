@@ -26,9 +26,9 @@ def cross_entropy_loss(out, y):
     # 2. Compute log softmax of out and (ones - out)
     # 3. Calculate binary cross entropy and take mean
     # HINT: Use minitorch.tensor_functions.ones, minitorch.nn.logsoftmax
-    
-    raise NotImplementedError("cross_entropy_loss not implemented")
-    
+    ones = minitorch.tensor_functions.ones(y.shape)
+    loss = - (y * out.log() + (ones - y) * (ones - out).log())
+    return loss.mean()
     # END ASSIGN1_3
 
 class Linear(minitorch.Module):
@@ -209,14 +209,27 @@ class SentenceSentimentTrain:
                 # 4. Calculate the loss using Binary Crossentropy Loss
                 # 5. Call backward function of the loss
                 # 6. Use Optimizer to take a gradient step
-                
-                raise NotImplementedError("SentenceSentimentTrain train not implemented")
-
+                backend = minitorch.TensorBackend(SimpleOps)
+                x_train_tensor = minitorch.tensor(
+                    ls=X_train[example_num:example_num + batch_size],
+                    backend=backend,
+                    requires_grad=True
+                )
+                y_train_tensor = minitorch.tensor(
+                    ls=y_train[example_num:example_num + batch_size],
+                    backend=backend,
+                    requires_grad=True
+                )
+                out = model.forward(x_train_tensor)
+                loss = cross_entropy_loss(out, y_train_tensor)
+                optim.zero_grad()
+                loss.backward()
+                optim.step()
                 # END ASSIGN1_3
                 
                 
                 # Save training results
-                train_predictions += get_predictions_array(y, out)
+                train_predictions += get_predictions_array(y_train_tensor, out)
                 total_loss += loss[0]
                 n_batches += 1
         
@@ -232,9 +245,20 @@ class SentenceSentimentTrain:
                 # 2. Get the output of the model
                 # 3. Obtain validation predictions using the get_predictions_array function, and add to the validation_predictions list
                 # 4. Obtain the validation accuracy using the get_accuracy function, and add to the validation_accuracy list
-                
-                raise NotImplementedError("SentenceSentimentTrain train not implemented")
-                
+                backend = minitorch.TensorBackend(SimpleOps)
+                x_val_tensor = minitorch.tensor(
+                    ls=X_val,
+                    backend=backend,
+                    requires_grad=False
+                )
+                y_val_tensor = minitorch.tensor(
+                    ls=y_val,
+                    backend=backend,
+                    requires_grad=False
+                )
+                out = model.forward(x_val_tensor)
+                validation_predictions = get_predictions_array(y_val_tensor, out)
+                validation_accuracy.append(get_accuracy(validation_predictions))
                 # END ASSIGN1_3
                 
                 model.train()
