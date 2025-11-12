@@ -9,10 +9,6 @@ In this assignment, students will implement a decoder-only transformer architect
 Clone the repository for the homework:  
 [https://github.com/llmsystem/llmsys_f25_hw3](https://github.com/llmsystem/llmsys_f25_hw3)
 
-## PSC Guide
-For guidance on using PSC resources, refer to the following document:  
-[PSC Guide](https://docs.google.com/document/d/1FzNWon1GePQNCqjx3tiXU-FQtxeBDruvjwORWRHhoVs/edit?usp=sharing)
-
 
 ## Setting up Your Code
 
