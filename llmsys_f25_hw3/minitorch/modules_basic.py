@@ -5,11 +5,13 @@ Sequential
 Embedding
 
 """
+import math
+
 import numpy as np
 
 from .module import Module, Parameter
 from .tensor_functions import (zeros, ones, rand, tensor, tensor_from_numpy, zeros_tensor_from_numpy, ones_tensor_from_numpy)
-from .nn import one_hot
+from .nn import one_hot, dropout
 from .tensor_ops import TensorBackend
 from .tensor import Tensor
 
@@ -71,7 +73,7 @@ class Dropout(Module):
             output : Tensor of shape (*)
         """
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        return dropout(x, self.p_dropout, self.training)
         ### END ASSIGN3_2
 
 
@@ -91,7 +93,14 @@ class Linear(Module):
         """
         self.out_size = out_size
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        limit = 1.0 / math.sqrt(in_size)
+        w = (2 * rand((in_size, out_size), backend=backend) - 1) * limit
+        self.weights = Parameter(w)
+        if bias:
+            b = (2 * rand((out_size,), backend=backend) - 1) * limit
+            self.bias = Parameter(b)
+        else:
+            self.bias = None
         ### END ASSIGN3_2
 
     def forward(self, x: Tensor):
@@ -105,7 +114,12 @@ class Linear(Module):
         """
         batch, in_size = x.shape
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        viewed_input = x.view(batch, in_size)
+        viewed_weights = self.weights.value.view(in_size, self.out_size)
+        multiplied = viewed_input @ viewed_weights
+        if self.bias is not None:
+            multiplied += self.bias.value
+        return multiplied
         ### END ASSIGN3_2
 
 
@@ -125,7 +139,8 @@ class LayerNorm1d(Module):
         self.dim = dim
         self.eps = eps
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        self.weights = ones([self.dim], backend=backend)
+        self.bias = zeros([self.dim], backend=backend)
         ### END ASSIGN3_2
 
     def forward(self, x: Tensor) -> Tensor:
@@ -141,5 +156,5 @@ class LayerNorm1d(Module):
         """
         batch, dim = x.shape
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        return x * self.weights + self.bias
         ### END ASSIGN3_2
