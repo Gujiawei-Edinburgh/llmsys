@@ -73,7 +73,11 @@ class Dropout(Module):
             output : Tensor of shape (*)
         """
         ### BEGIN ASSIGN3_2
-        return dropout(x, self.p_dropout, self.training)
+        if not self.training or self.p_dropout == 0.0: # p_dropout is included here if not it will consume the seed and casue the test failed
+            return x
+        mask_data = np.random.binomial(1, 1.0 - self.p_dropout, size=x.shape)
+        mask = Tensor.make(mask_data.astype(np.float64).flatten(), x.shape, backend=x.backend)
+        return x * mask * (1.0 / (1.0 - self.p_dropout))
         ### END ASSIGN3_2
 
 
