@@ -35,7 +35,7 @@ class Embedding(Module):
         self.num_embeddings = num_embeddings # Vocab size
         self.embedding_dim  = embedding_dim  # Embedding Dimension
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        self.weights = Parameter(rand((num_embeddings, embedding_dim), backend=backend))
         ### END ASSIGN3_2
     
     def forward(self, x: Tensor):
@@ -49,7 +49,10 @@ class Embedding(Module):
         """
         bs, seq_len = x.shape
         ### BEGIN ASSIGN3_2
-        raise NotImplementedError
+        one_hot_x = one_hot(x, self.num_embeddings)
+        flat_x = one_hot_x.view(bs * seq_len, self.num_embeddings)
+        flat_out = flat_x @ self.weights.value
+        return flat_out.view(bs, seq_len, self.embedding_dim)
         ### END ASSIGN3_2
 
     
