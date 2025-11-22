@@ -143,8 +143,8 @@ class LayerNorm1d(Module):
         self.dim = dim
         self.eps = eps
         ### BEGIN ASSIGN3_2
-        self.weights = ones([self.dim], backend=backend)
-        self.bias = zeros([self.dim], backend=backend)
+        self.weights = Parameter(ones((self.dim, ), backend=backend))
+        self.bias = Parameter(zeros((self.dim,), backend=backend))
         ### END ASSIGN3_2
 
     def forward(self, x: Tensor) -> Tensor:
@@ -160,5 +160,9 @@ class LayerNorm1d(Module):
         """
         batch, dim = x.shape
         ### BEGIN ASSIGN3_2
-        return x * self.weights + self.bias
+        mean = x.mean(1).view(batch, 1)
+        var = ((x - mean) ** 2).mean(1).view(batch, 1)
+        std = (var + self.eps) ** 0.5
+        x_norm = (x - mean) / std
+        return x_norm * self.weights.value + self.bias.value
         ### END ASSIGN3_2
