@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from .tensor import tensor, tensor_from_numpy
 from .module import Module, Parameter
@@ -45,12 +47,11 @@ class MultiHeadAttention(Module):
         self.attn_hidden_dim = n_embd // n_head
 
         ### BEGIN ASSIGN3_3
-        raise NotImplementedError
-        # self.q_projection = 
-        # self.k_projection = 
-        # self.v_projection = 
-        # self.out_projection = 
-        # self.dropout = 
+        self.q_projection = Linear(n_embd, n_embd, bias=bias, backend=backend)
+        self.k_projection = Linear(n_embd, n_embd, bias=bias, backend=backend)
+        self.v_projection = Linear(n_embd, n_embd, bias=bias, backend=backend)
+        self.out_projection = Linear(n_embd, n_embd, bias=bias, backend=backend)
+        self.dropout = Dropout(p_dropout)
         ### END ASSIGN3_3
 
     def create_causal_mask(self, seq_len):
@@ -87,7 +88,15 @@ class MultiHeadAttention(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN ASSIGN3_3
-        raise NotImplementedError
+        input_x = x.view(batch_size * seq_len, n_embd)
+        q_out = self.q_projection(input_x)
+        kT_out = self.k_projection(input_x)
+        v_out = self.v_projection(input_x)
+        q = q_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3)
+        k = kT_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3)
+        v = v_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3)
+
+        kT = k.permute(0, 1, 3, 2)
         ### END ASSIGN3_3
         return q, kT, v
     
@@ -110,7 +119,15 @@ class MultiHeadAttention(Module):
         result = None
         
         ### BEGIN ASSIGN3_3
-        raise NotImplementedError
+        out = (q @ kT) / math.sqrt(q_dim)
+        if self.causal:
+            mask = self.create_causal_mask(queries_len)
+            out = out + mask
+        out = softmax(out, 3)
+        attn_weights = self.dropout(out)
+        attn_out = attn_weights @ v
+        attn_out = attn_out.permute(0, 2, 1, 3).contiguous().view(batch_size, queries_len, self.n_embd)
+        result = attn_out.view(batch_size * queries_len, self.n_embd)
         ### END ASSIGN3_3
 
         return result
@@ -127,7 +144,10 @@ class MultiHeadAttention(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN ASSIGN3_3
-        raise NotImplementedError
+        q, kT, v = self.project_to_query_key_value(x)
+        attn_out = self.self_attention(q, kT, v)
+        output_flat = self.out_projection(attn_out.view(batch_size * seq_len, n_embd))
+        return output_flat.view(batch_size, seq_len, n_embd)
         ### END ASSIGN3_3
 
 
@@ -196,11 +216,10 @@ class TransformerLayer(Module):
             ff (FeedForward): Feed-forward network layer
         """
         ### BEGIN ASSIGN3_3
-        raise NotImplementedError
-        # self.ln_1 = 
-        # self.ln_2 = 
-        # self.attention = 
-        # self.ff = 
+        self.ln_1 = LayerNorm1d(n_embd, eps=ln_eps, backend=backend)
+        self.ln_2 = LayerNorm1d(n_embd, eps=ln_eps, backend=backend)
+        self.attention = MultiHeadAttention(n_embd=n_embd, n_head=n_head, p_dropout=p_dropout, backend=backend)
+        self.ff = FeedForward(n_embd=n_embd, middle_dim=n_embd // n_head, p_dropout=p_dropout, bias=bias, backend=backend)
         ### END ASSIGN3_3
 
     def forward(self, x):
