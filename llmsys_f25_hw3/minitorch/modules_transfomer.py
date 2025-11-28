@@ -90,13 +90,12 @@ class MultiHeadAttention(Module):
         ### BEGIN ASSIGN3_3
         input_x = x.view(batch_size * seq_len, n_embd)
         q_out = self.q_projection(input_x)
-        kT_out = self.k_projection(input_x)
+        k_out = self.k_projection(input_x)
         v_out = self.v_projection(input_x)
-        q = q_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3)
-        k = kT_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3)
-        v = v_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3)
 
-        kT = k.permute(0, 1, 3, 2)
+        q = q_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3).contiguous()
+        kT = k_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 3, 1).contiguous()
+        v = v_out.view(batch_size, seq_len, self.n_head, self.attn_hidden_dim).permute(0, 2, 1, 3).contiguous()
         ### END ASSIGN3_3
         return q, kT, v
     
@@ -119,7 +118,7 @@ class MultiHeadAttention(Module):
         result = None
         
         ### BEGIN ASSIGN3_3
-        out = (q @ kT) / math.sqrt(q_dim)
+        out = (q @ kT) / math.sqrt(self.attn_hidden_dim)
         if self.causal:
             mask = self.create_causal_mask(queries_len)
             out = out + mask
@@ -127,7 +126,7 @@ class MultiHeadAttention(Module):
         attn_weights = self.dropout(out)
         attn_out = attn_weights @ v
         attn_out = attn_out.permute(0, 2, 1, 3).contiguous().view(batch_size, queries_len, self.n_embd)
-        result = attn_out.view(batch_size * queries_len, self.n_embd)
+        result = attn_out
         ### END ASSIGN3_3
 
         return result
