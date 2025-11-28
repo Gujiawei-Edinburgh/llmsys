@@ -1,6 +1,8 @@
 import math
 
 import numpy as np
+
+from . import layer_norm
 from .tensor import tensor, tensor_from_numpy
 from .module import Module, Parameter
 from .modules_basic import (
@@ -233,7 +235,13 @@ class TransformerLayer(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        layer1_norm_out = self.ln_1(x)
+        attn_out = self.attention(layer1_norm_out)
+        x_add1 = x + attn_out
+        layer2_norm_out = self.ln_2(x_add1)
+        ffn_out = self.ff(layer2_norm_out)
+        x_add2 = x_add1 + ffn_out
+        return x_add2
         ### END YOUR SOLUTION
 
 
