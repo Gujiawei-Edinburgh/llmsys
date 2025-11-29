@@ -219,8 +219,14 @@ class TransformerLayer(Module):
         ### BEGIN ASSIGN3_3
         self.ln_1 = LayerNorm1d(n_embd, eps=ln_eps, backend=backend)
         self.ln_2 = LayerNorm1d(n_embd, eps=ln_eps, backend=backend)
-        self.attention = MultiHeadAttention(n_embd=n_embd, n_head=n_head, p_dropout=p_dropout, backend=backend)
-        self.ff = FeedForward(n_embd=n_embd, middle_dim=n_embd // n_head, p_dropout=p_dropout, bias=bias, backend=backend)
+        self.attention = MultiHeadAttention(
+            n_embd=n_embd,
+            n_head=n_head,
+            p_dropout=p_dropout,
+            bias=bias,
+            backend=backend
+        )
+        self.ff = FeedForward(n_embd=n_embd, p_dropout=p_dropout, bias=bias, backend=backend)
         ### END ASSIGN3_3
 
     def forward(self, x):
@@ -235,13 +241,16 @@ class TransformerLayer(Module):
         """
         batch_size, seq_len, n_embd = x.shape
         ### BEGIN YOUR SOLUTION
-        layer1_norm_out = self.ln_1(x)
-        attn_out = self.attention(layer1_norm_out)
-        x_add1 = x + attn_out
-        layer2_norm_out = self.ln_2(x_add1)
-        ffn_out = self.ff(layer2_norm_out)
-        x_add2 = x_add1 + ffn_out
-        return x_add2
+        x_ln = self.ln_1(x.view(batch_size * seq_len, n_embd)).view(batch_size, seq_len, n_embd)
+        x_mha = self.attention(x_ln)
+        x = x + x_mha
+
+        x_ln = self.ln_2(x.view(batch_size * seq_len, n_embd)).view(batch_size, seq_len, n_embd)
+        x_ff = self.ff(x_ln)
+        x = x + x_ff
+        # END ASSIGN3_3
+
+        return x
         ### END YOUR SOLUTION
 
 
