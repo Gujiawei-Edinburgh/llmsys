@@ -12,7 +12,7 @@ from transformers import AutoTokenizer
 from tokenizers import ByteLevelBPETokenizer
 
 import minitorch
-from minitorch import DecoderLM
+from minitorch import DecoderLM, argmax
 from minitorch.cuda_kernel_ops import CudaKernelOps
 
 
@@ -305,7 +305,11 @@ def generate(
             # run the model with current token_ids, and predict the next token (gen_id)
             # hint: obtain the logits of next token, and take the argmax.
             gen_id = 0
-            raise NotImplementedError("Generation Function Not Implemented Yet")
+            logits = model.forward(idx=minitorch.tensor([token_ids], backend=backend))
+            arg_max_tensor = minitorch.nn.argmax(logits, dim=2)
+            np_arg_max = arg_max_tensor.to_numpy()
+            last_onehot = np_arg_max[0, -1]
+            gen_id = int(last_onehot.argmax())
             # END ASSIGN3_4
 
             if gen_id == tokenizer.vocab[f'<eos_{tgt_key}>']:
