@@ -7,6 +7,7 @@ import json
 import random
 import datasets
 import numpy as np
+from datasets import Dataset
 from sacrebleu.metrics import BLEU
 from transformers import AutoTokenizer
 from tokenizers import ByteLevelBPETokenizer
@@ -30,10 +31,14 @@ def get_dataset(dataset_name, model_max_length):
             - src_key (str): Source language key ('de')
             - tgt_key (str): Target language key ('en')
     """
-    dataset = {
-        split: datasets.load_dataset(dataset_name, split=split, trust_remote_code=True, cache_dir="~/.cache/huggingface/datasets")['translation']
-        for split in ['train', 'validation', 'test']
-    }
+    cache_folder = "/root/.cache/huggingface/datasets/bbaaaa___iwslt14-de-en-preprocess/de-en/1.0.0/c56d7dc0dcc7c6e27d0a917a0ab0f40083999465"
+
+    dataset = {}
+
+    for split in ['train', 'validation', 'test']:
+        file_path = os.path.join(cache_folder, f"iwslt14-de-en-preprocess-{split}.arrow")
+        ds = datasets.Dataset.from_file(file_path)
+        dataset[split] = ds['translation']
     src_key, tgt_key = 'de', 'en'
 
     dataset = {
