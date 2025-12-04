@@ -31,7 +31,7 @@ def get_dataset(dataset_name, model_max_length):
             - tgt_key (str): Target language key ('en')
     """
     dataset = {
-        split: datasets.load_dataset(dataset_name, split=split)['translation']
+        split: datasets.load_dataset(dataset_name, split=split, trust_remote_code=True, cache_dir="~/.cache/huggingface/datasets")['translation']
         for split in ['train', 'validation', 'test']
     }
     src_key, tgt_key = 'de', 'en'
