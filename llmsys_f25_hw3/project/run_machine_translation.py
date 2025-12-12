@@ -311,10 +311,9 @@ def generate(
             # hint: obtain the logits of next token, and take the argmax.
             gen_id = 0
             logits = model.forward(idx=minitorch.tensor([token_ids], backend=backend))
-            arg_max_tensor = minitorch.nn.argmax(logits, dim=2)
-            np_arg_max = arg_max_tensor.to_numpy()
-            last_onehot = np_arg_max[0, -1]
-            gen_id = int(last_onehot.argmax())
+            logits_np = logits.to_numpy()
+            last_token_logits = logits_np[0, -1, :]
+            gen_id = int(np.argmax(last_token_logits))
             # END ASSIGN3_4
 
             if gen_id == tokenizer.vocab[f'<eos_{tgt_key}>']:
