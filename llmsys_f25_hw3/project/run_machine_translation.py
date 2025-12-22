@@ -7,6 +7,7 @@ import json
 import random
 import datasets
 import numpy as np
+import logging
 from datasets import Dataset
 from sacrebleu.metrics import BLEU
 from transformers import AutoTokenizer
@@ -15,6 +16,8 @@ from tokenizers import ByteLevelBPETokenizer
 import minitorch
 from minitorch import DecoderLM, argmax
 from minitorch.cuda_kernel_ops import CudaKernelOps
+
+logger = logging.getLogger(__name__)
 
 
 def get_dataset(dataset_name, model_max_length):
@@ -51,9 +54,10 @@ def get_dataset(dataset_name, model_max_length):
 
     dataset['test'] = dataset['test'][:100]  # 6750
 
-    print(json.dumps(
-        {'data_size': {split: len(dataset[split]) for split in dataset.keys()}},
-        indent=4))
+    logger.info(
+        "Dataset sizes: %s",
+        json.dumps(
+            {'data_size': {split: len(dataset[split]) for split in dataset.keys()}}))
 
     return dataset, src_key, tgt_key
 
@@ -198,7 +202,30 @@ def loss_fn(batch, model):
     return ((loss * label_token_weights).sum() / label_token_weights.sum())
 
 
-def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc):
+def clip_grad_norm(parameters, max_norm):
+    """
+    Clip gradients to a maximum global norm to stabilize training.
+    """
+    total_norm_sq = 0.0
+    for p in parameters:
+        if p.value is None or getattr(p.value, "grad", None) is None:
+            continue
+        grad = p.value.grad
+        # Use numpy to avoid extra tensor ops here.
+        g_np = grad.to_numpy()
+        total_norm_sq += float((g_np * g_np).sum())
+    total_norm = total_norm_sq ** 0.5
+
+    if total_norm > max_norm and total_norm > 0:
+        scale = max_norm / (total_norm + 1e-6)
+        for p in parameters:
+            if p.value is None or getattr(p.value, "grad", None) is None:
+                continue
+            p.value.grad = p.value.grad * scale
+    return total_norm
+
+
+def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc, max_grad_norm):
     """
     Train the model on provided examples.
     
@@ -227,12 +254,18 @@ def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc):
         loss.backward()
         t2 = time.time()
 
+        grad_norm = clip_grad_norm(model.parameters(), max_grad_norm)
         optimizer.step()
         t3 = time.time()
 
-        print(f"Forward: {t1 - t0}")
-        print(f"Backward: {t2 - t1}")
-        print(f"Opt.step: {t3 - t2}")
+        logger.info(
+            "Step %d: loss=%.4f, grad_norm=%.4f, forward=%.4fs, backward=%.4fs, opt=%.4fs",
+            i // batch_size,
+            loss.item(),
+            grad_norm,
+            t1 - t0,
+            t2 - t1,
+            t3 - t2)
 
         batch_time = time.time() - t0
         prog_bar.set_postfix(
@@ -350,11 +383,12 @@ def main(
     model_max_length=40,
     n_epochs=20,
     batch_size=128,
-    learning_rate=0.02,
+    learning_rate=0.001,
     samples_per_epoch=20000,
     n_vocab=10000,
     n_embd=256,
-    seed=11111
+    seed=11111,
+    max_grad_norm=1.0
 ):
     """
     Train and evaluate a decoder-only transformer language model.
@@ -393,6 +427,16 @@ def main(
     model = DecoderLM(**config)
     optimizer = minitorch.Adam(model.parameters(), lr=learning_rate)
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logger.info(
+        "Starting training with lr=%s, max_grad_norm=%s, batch_size=%s, samples_per_epoch=%s",
+        learning_rate,
+        max_grad_norm,
+        batch_size,
+        samples_per_epoch)
+
     dataset, src_key, tgt_key = get_dataset(
         dataset_name=dataset_name, model_max_length=model_max_length)
 
@@ -411,6 +455,8 @@ def main(
         model_max_length=model_max_length,
         backend=backend)
 
+    logger.info(f"The model total params: {len(model.parameters())}")
+
     for epoch_idx in range(n_epochs):
         desc = f'epoch {epoch_idx} / {n_epochs}'
 
@@ -421,7 +467,8 @@ def main(
             n_samples=samples_per_epoch,
             batch_size=batch_size,
             collate_fn=collate_fn,
-            desc=desc)
+            desc=desc,
+            max_grad_norm=max_grad_norm)
 
         validation_loss = evaluate_loss(
             model=model,
@@ -430,7 +477,7 @@ def main(
             collate_fn=collate_fn,
             desc=desc)
 
-        print(f'Epoch {epoch_idx}: Validation Loss = {validation_loss}')
+        logger.info('Epoch %d: Validation Loss = %.4f', epoch_idx, validation_loss)
 
         gen_sents = generate(
             model=model,
@@ -450,7 +497,7 @@ def main(
 
         eval_scores = evaluate_bleu(
             examples=dataset['test'], gen_sents=gen_sents, tgt_key=tgt_key)
-        print(f'Epoch {epoch_idx}: {eval_scores}')
+        logger.info('Epoch %d: Eval scores %s', epoch_idx, eval_scores)
 
         json.dump(
             {'validation_loss': float(validation_loss), **eval_scores},
