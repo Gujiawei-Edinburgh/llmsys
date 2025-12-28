@@ -1,5 +1,6 @@
 from functools import partial
 import time
+import math
 import os
 import fire
 import tqdm
@@ -8,7 +9,6 @@ import random
 import datasets
 import numpy as np
 import logging
-from datasets import Dataset
 from sacrebleu.metrics import BLEU
 from transformers import AutoTokenizer
 from tokenizers import ByteLevelBPETokenizer
@@ -245,23 +245,38 @@ def train(model, optimizer, examples, n_samples, collate_fn, batch_size, desc, m
     for i in (prog_bar := tqdm.trange(
             0, len(examples), batch_size, desc=f'Training ({desc})')):
         batch = collate_fn(examples=examples[i:i + batch_size])
+        mask_sum = float(batch['label_token_weights'].sum().item())
+        if mask_sum == 0.0 or math.isinf(mask_sum) or math.isnan(mask_sum):
+            logger.warning(
+                "Skipping batch %d: invalid label_token_weights sum=%s",
+                i // batch_size,
+                mask_sum)
+            continue
 
         t0 = time.time()
         optimizer.zero_grad()
         loss = loss_fn(batch=batch, model=model)
         t1 = time.time()
 
+        loss_val = loss.item()
+        if not np.isfinite(loss_val):
+            logger.error("Non-finite loss detected (%.4f) at step %d. Stopping epoch.", loss_val, i // batch_size)
+            break
+
         loss.backward()
         t2 = time.time()
 
         grad_norm = clip_grad_norm(model.parameters(), max_grad_norm)
+        if not np.isfinite(grad_norm):
+            logger.error("Non-finite grad norm detected (%.4f) at step %d. Stopping epoch.", grad_norm, i // batch_size)
+            break
         optimizer.step()
         t3 = time.time()
 
         logger.info(
             "Step %d: loss=%.4f, grad_norm=%.4f, forward=%.4fs, backward=%.4fs, opt=%.4fs",
             i // batch_size,
-            loss.item(),
+            loss_val,
             grad_norm,
             t1 - t0,
             t2 - t1,
@@ -383,12 +398,12 @@ def main(
     model_max_length=40,
     n_epochs=20,
     batch_size=128,
-    learning_rate=0.001,
+    learning_rate=0.0005,
     samples_per_epoch=20000,
     n_vocab=10000,
     n_embd=256,
     seed=11111,
-    max_grad_norm=1.0
+    max_grad_norm=0.5
 ):
     """
     Train and evaluate a decoder-only transformer language model.
@@ -398,7 +413,7 @@ def main(
         model_max_length (int): Maximum sequence length, default 40
         n_epochs (int): Number of training epochs, default 20
         batch_size (int): Number of examples per batch, default 128
-        learning_rate (float): Learning rate for optimizer, default 0.02
+        learning_rate (float): Learning rate for optimizer, default 0.0005
         samples_per_epoch (int): Training samples per epoch, default 20000
         n_vocab (int): Vocabulary size for tokenizer, default 10000
         n_embd (int): Embedding dimension, default 256
