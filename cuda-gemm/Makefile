@@ -1,5 +1,6 @@
 NVCC ?= nvcc
 NVCCFLAGS ?= -O3 --std=c++14
+LDFLAGS ?= -lcublas
 INCLUDES := -Iinclude
 
 SRCDIR := src

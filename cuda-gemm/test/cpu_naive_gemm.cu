@@ -1,4 +1,5 @@
 #include "../include/MatrixFP32.cuh"
+#include "../include/utils.cuh"
 
 #include <cuda_runtime.h>
 
@@ -22,16 +23,9 @@ static void cpu_gemm(const float *a, const float *b, float *c, int C_rows, int C
     }
 }
 
-static void fill_random(float *buf, int count)
-{
-    for (int i = 0; i < count; i++) {
-        buf[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-    }
-}
-
 int main()
 {
-    const int sizes[] = {128, 256, 512, 1024, 2048, 4096};
+    const int sizes[] = {128, 256, 512, 1024}; // focus samller matricies that cpu will not take too long to finish
 
     for (int size : sizes) {
         const int rows = size;
