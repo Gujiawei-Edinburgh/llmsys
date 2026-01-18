@@ -37,6 +37,26 @@ int main()
         h_a.copy_to_device(d_a);
         h_b.copy_to_device(d_b);
 
+        // Warm up to reduce first-call overhead (context init, module load).
+        naive_gemm(d_a.ptr, d_b.ptr, d_c_naive.ptr, rows, cols, kdim);
+        const float alpha = 1.0f;
+        const float beta = 0.0f;
+        cublasCheck(cublasSgemm(handle,
+                                CUBLAS_OP_N,
+                                CUBLAS_OP_N,
+                                cols,
+                                rows,
+                                kdim,
+                                &alpha,
+                                d_b.ptr,
+                                cols,
+                                d_a.ptr,
+                                kdim,
+                                &beta,
+                                d_c_cublas.ptr,
+                                cols));
+        cudaDeviceSynchronize();
+
         cudaEvent_t start, stop;
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
@@ -47,8 +67,6 @@ int main()
         float naive_ms = 0.0f;
         cudaEventElapsedTime(&naive_ms, start, stop);
 
-        const float alpha = 1.0f;
-        const float beta = 0.0f;
         cudaEventRecord(start);
         cublasCheck(cublasSgemm(handle,
                                 CUBLAS_OP_N,
