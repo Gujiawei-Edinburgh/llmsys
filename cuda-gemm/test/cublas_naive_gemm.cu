@@ -99,10 +99,16 @@ int main()
             }
         }
 
-        std::printf("N=%d naive=%.3f ms cuBLAS=%.3f ms max_abs_err=%.6f\n",
+        const double flops = 2.0 * static_cast<double>(rows) * cols * kdim;
+        const double naive_tflops = (flops / 1.0e12) / (naive_ms / 1.0e3);
+        const double cublas_tflops = (flops / 1.0e12) / (cublas_ms / 1.0e3);
+
+        std::printf("N=%d naive=%.3f ms (%.3f TFLOP/s) cuBLAS=%.3f ms (%.3f TFLOP/s) max_abs_err=%.6f\n",
                     size,
                     naive_ms,
+                    naive_tflops,
                     cublas_ms,
+                    cublas_tflops,
                     max_abs_err);
 
         cudaEventDestroy(start);
