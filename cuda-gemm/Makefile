@@ -1,6 +1,5 @@
 NVCC ?= nvcc
 NVCCFLAGS ?= -O3 --std=c++14
-PTXFLAGS ?=
 PTXASFLAGS ?=
 LDFLAGS ?= -lcublas
 INCLUDES := -Iinclude
@@ -14,24 +13,22 @@ SRC_CU := $(wildcard $(SRCDIR)/*.cu)
 OBJ := $(patsubst $(SRCDIR)/%.cu,$(BUILDDIR)/%.o,$(SRC_CU))
 
 TEST_CU := $(wildcard $(TESTDIR)/*.cu)
-ifneq ($(strip $(TEST)),)
-TEST_CU := $(TESTDIR)/$(TEST).cu
-endif
-TEST_BINS := $(patsubst $(TESTDIR)/%.cu,$(BINDIR)/%,$(TEST_CU))
+TESTS := $(basename $(notdir $(TEST_CU)))
+TEST_BINS := $(addprefix $(BINDIR)/,$(TESTS))
 
-.PHONY: all test tests clean
+.PHONY: all tests clean $(TESTS)
 
 all: tests
 
-test: tests
-
 tests: $(TEST_BINS)
 
+$(TESTS): %: $(BINDIR)/%
+
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cu | $(BUILDDIR)
-	$(NVCC) $(NVCCFLAGS) $(PTXFLAGS) $(PTXASFLAGS) $(INCLUDES) -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) $(PTXASFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BINDIR)/%: $(TESTDIR)/%.cu $(OBJ) | $(BINDIR)
-	$(NVCC) $(NVCCFLAGS) $(PTXFLAGS) $(PTXASFLAGS) $(INCLUDES) $< $(OBJ) -o $@ $(LDFLAGS)
+	$(NVCC) $(NVCCFLAGS) $(PTXASFLAGS) $(INCLUDES) $< $(OBJ) -o $@ $(LDFLAGS)
 
 $(BUILDDIR):
 	mkdir -p $@
@@ -41,3 +38,8 @@ $(BINDIR):
 
 clean:
 	rm -rf $(BUILDDIR) $(BINDIR)
+
+.DEFAULT:
+	@if [ "$@" = "Makefile" ]; then exit 0; fi
+	@echo "Unknown target '$@'. Valid targets: all tests clean $(TESTS)"
+	@exit 1
