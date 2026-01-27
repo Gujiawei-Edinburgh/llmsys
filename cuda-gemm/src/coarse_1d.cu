@@ -9,17 +9,13 @@ __global__ void coarse_1d_kernel(float *a, float *b, float*c, int C_rows, int C_
     int by = blockIdx.y;
     int bx = blockIdx.x;
 
-    int ty = threadIdx.y;
     int tx = threadIdx.x;
 
-    int A_view_ty = tx / tiles_A_cols; // map 2d to 1d view
-    int A_view_tx = tx % tiles_A_cols;
+    int A_view_ty = tx / TILE_A_COLS; // map 2d to 1d view
+    int A_view_tx = tx % TILE_A_COLS;
 
-    int B_view_ty = tx / tiles_B_cols;
-    int B_view_tx = tx % tiles_B_cols;
-
-    int row = TILE_A_ROWS*by + COARSE_FACTOR * (tx/TILE_B_COLS);
-    int col = TILE_A_COLS*bx + (tx % tiles_B_cols);
+    int B_view_ty = tx / TILE_B_COLS;
+    int B_view_tx = tx % TILE_B_COLS;
 
     __shared__ float sh_a[TILE_A_ROWS][TILE_A_COLS];
     __shared__ float sh_b[TILE_A_COLS][TILE_B_COLS];
@@ -28,23 +24,23 @@ __global__ void coarse_1d_kernel(float *a, float *b, float*c, int C_rows, int C_
 
     float coarsed_value[COARSE_FACTOR] = {0.0f};
 
-    for (int p = 0; p < phases; p++)
+    for (int phase = 0; phase < phases; phase++)
     {
-        if ((by * TILE_A_ROWS + A_view_ty < C_n_rows) && ((phase * TILE_A_COLS + A_view_tx) < A_cols))
+        if ((by * TILE_A_ROWS + A_view_ty < C_rows) && ((phase * TILE_A_COLS + A_view_tx) < A_cols))
         {
-            sh_a[A_view_ty][A_view_tx] = a[(by * TILE_A_ROWS + A_view_ty) * A_cols + (phase*TILE_A_COLS+A_view_tx)];
+            sh_a[A_view_ty][A_view_tx] = a[(by * TILE_A_ROWS + A_view_ty) * A_cols + (phase * TILE_A_COLS + A_view_tx)];
         }
         else
         {
             sh_a[A_view_ty][A_view_tx] = 0.0f;
         }
-        if ((phase * TILE_A_COLS + B_view_ty) < A_cols) && (bx * TILE_B_COLS + B_view_tx < C_cols))
+        if ((phase * TILE_A_COLS + B_view_ty) < A_cols && (bx * TILE_B_COLS + B_view_tx < C_cols))
         {
-            sh_b[A_view_ty][A_view_tx] = b[(phase * TILE_A_COLS + B_view_ty)*C_cols + (bx * TILE_B_COLS + B_view_tx)];
+            sh_b[B_view_ty][B_view_tx] = b[(phase * TILE_A_COLS + B_view_ty) * C_cols + (bx * TILE_B_COLS + B_view_tx)];
         }
         else
         {
-            sh_b[A_view_ty][A_view_tx] = 0.0f;
+            sh_b[B_view_ty][B_view_tx] = 0.0f;
         }
         __syncthreads();
 
@@ -57,6 +53,20 @@ __global__ void coarse_1d_kernel(float *a, float *b, float*c, int C_rows, int C_
             }
         }
         __syncthreads();
+    }
+
+    int row_base = by * TILE_A_ROWS + B_view_ty * COARSE_FACTOR;
+    int col = bx * TILE_B_COLS + B_view_tx;
+    if (col < C_cols)
+    {
+        for (int ci = 0; ci < COARSE_FACTOR; ci++)
+        {
+            int row = row_base + ci;
+            if (row < C_rows)
+            {
+                c[row * C_cols + col] = coarsed_value[ci];
+            }
+        }
     }
 }
 
