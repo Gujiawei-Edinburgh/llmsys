@@ -2,12 +2,12 @@
 # define COARSE_FACTOR_Y 8
 
 #define TILE_A_ROWS 128
-#define TILE_A_COLS 8
+#define TILE_A_COLS 16
 #define TILE_B_COLS 128
 
 __global__ void coarse_2d_kernel(float *a, float *b, float*c, int C_rows, int C_cols, int A_cols)
 {
-    int num_threads_per_blk = tiles_A_rows * tiles_B_cols / (COARSE_FACTOR_X*COARSE_FACTOR_Y);
+    int num_threads_per_blk = TILE_A_ROWS * TILE_B_COLS / (COARSE_FACTOR_X * COARSE_FACTOR_Y);
     int by = blockIdx.y;
     int bx = blockIdx.x;
 
@@ -28,8 +28,8 @@ __global__ void coarse_2d_kernel(float *a, float *b, float*c, int C_rows, int C_
     __shared__ float sh_b[TILE_A_COLS][TILE_B_COLS];
 
     float coarsed_value[COARSE_FACTOR_Y][COARSE_FACTOR_X] = {0.0f};
-    float register_A[COARSE_FACTOR_X] = {0.0f};
-    float register_B[COARSE_FACTOR_Y] = {0.0f};
+    float register_A[COARSE_FACTOR_Y] = {0.0f};
+    float register_B[COARSE_FACTOR_X] = {0.0f};
 
     int phases = ceil((float)A_cols/TILE_A_COLS);
 
@@ -62,11 +62,11 @@ __global__ void coarse_2d_kernel(float *a, float *b, float*c, int C_rows, int C_
         // calculation
         for (int k = 0; k < TILE_A_COLS; k++)
         {
-            for (int i = 0; i < COARSE_FACTOR_X; i++)
+            for (int i = 0; i < COARSE_FACTOR_Y; i++)
             {
                 register_A[i] = sh_a[row + i][k];
             }
-            for (int i = 0; i < COARSE_FACTOR_Y; i++)
+            for (int i = 0; i < COARSE_FACTOR_X; i++)
             {
                 register_B[i] = sh_b[k][col + i];
             }
@@ -74,7 +74,7 @@ __global__ void coarse_2d_kernel(float *a, float *b, float*c, int C_rows, int C_
             {
                 for (int j = 0; j < COARSE_FACTOR_X; j++)
                 {
-                    coarsed_value[i][j] = register_A[i] * register_B[j];
+                    coarsed_value[i][j] += register_A[i] * register_B[j];
                 }
             }
         }
@@ -85,8 +85,8 @@ __global__ void coarse_2d_kernel(float *a, float *b, float*c, int C_rows, int C_
     {
         for (int cx = 0; cx < COARSE_FACTOR_X; cx++)
         {
-            if ((by * TILE_A_ROWS + row + cy < C_rows) && (bx * tiles_B_cols + col + cx < C_cols))
-                c[(by * TILE_A_ROWS + row + cy) * C_cols + (bx * tiles_B_cols + col + cx)] = coarsed_value[cy][cx];
+            if ((by * TILE_A_ROWS + row + cy < C_rows) && (bx * TILE_B_COLS + col + cx < C_cols))
+                c[(by * TILE_A_ROWS + row + cy) * C_cols + (bx * TILE_B_COLS + col + cx)] = coarsed_value[cy][cx];
         }
     }
 }
