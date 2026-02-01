@@ -12,7 +12,7 @@ void coarse_2d_vec(float *a, float *b, float *c, int C_rows, int C_cols, int A_c
 
 int main()
 {
-    const int sizes[] = {128, 256, 512, 1024, 2048, 4096};
+    const int sizes[] = {1024, 2048, 4096, 8192};
     cublasHandle_t handle;
     cublasCheck(cublasCreate(&handle));
 
