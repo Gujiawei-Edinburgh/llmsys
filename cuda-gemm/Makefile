@@ -1,5 +1,6 @@
 NVCC ?= nvcc
-NVCCFLAGS ?= -O3 --std=c++14
+CUDA_ARCH ?= sm_89
+NVCCFLAGS ?= -O3 --std=c++14 -arch=$(CUDA_ARCH)
 PTXASFLAGS ?=
 LDFLAGS ?= -lcublas
 INCLUDES := -Iinclude

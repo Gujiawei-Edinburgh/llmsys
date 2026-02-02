@@ -12,7 +12,7 @@ MatrixFP32::MatrixFP32(int rows_, int cols_, bool on_device_)
     else
     {
         cudaError_t err = cudaMalloc((void**)&ptr, rows * cols * sizeof(float));
-        cuda_check(err);
+        cudaCheck(err);
     }
 }
 
@@ -34,7 +34,7 @@ void MatrixFP32::copy_to_device(MatrixFP32 d_mat)
     assert(d_mat.on_device == true && "Input Matrix to this function must be in device memory");
 
     cudaError_t err = cudaMemcpy(d_mat.ptr, ptr, rows * cols * sizeof(float), cudaMemcpyHostToDevice);
-    cuda_check(err);
+    cudaCheck(err);
 }
 
 void MatrixFP32::copy_to_host(MatrixFP32 h_mat)
@@ -43,5 +43,5 @@ void MatrixFP32::copy_to_host(MatrixFP32 h_mat)
     assert(h_mat.on_device == false && "Input Matrix to this function must be on host memory");
 
     cudaError_t err = cudaMemcpy(h_mat.ptr, ptr, rows * cols * sizeof(float), cudaMemcpyDeviceToHost);
-    cuda_check(err);
+    cudaCheck(err);
 }
