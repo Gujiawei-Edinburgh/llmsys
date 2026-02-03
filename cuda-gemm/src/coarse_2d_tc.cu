@@ -98,14 +98,13 @@ __global__ void coarse_2d_tc_kernel(const float *a,
 
 } // namespace
 
-bool coarse_2d_tc(const float *a, const float *b, float *c, int M, int N, int K)
+void coarse_2d_tc(float *a, float *b, float *c, int M, int N, int K)
 {
     if ((M % BM) != 0 || (N % BN) != 0 || (K % BK) != 0) {
-        return false;
+        return;
     }
 
     dim3 block(256);
     dim3 grid(N / BN, M / BM);
-    coarse_2d_tf32_tc_kernel<<<grid, block>>>(a, b, c, M, N, K);
-    return true;
+    coarse_2d_tc_kernel<<<grid, block>>>(a, b, c, M, N, K);
 }
