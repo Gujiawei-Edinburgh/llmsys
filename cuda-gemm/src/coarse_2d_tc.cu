@@ -7,8 +7,8 @@ constexpr int WMMA_M = 16;
 constexpr int WMMA_N = 16;
 constexpr int WMMA_K = 8;
 
-constexpr int BM = 64;
-constexpr int BN = 64;
+constexpr int BM = 128;
+constexpr int BN = 128;
 constexpr int BK = 32; // must be multiple of WMMA_K
 
 static_assert(BK % WMMA_K == 0, "BK must be a multiple of WMMA_K");
@@ -16,16 +16,16 @@ static_assert(BM % WMMA_M == 0, "BM must be a multiple of WMMA_M");
 static_assert(BN % WMMA_N == 0, "BN must be a multiple of WMMA_N");
 
 __global__ void coarse_2d_tc_kernel(const float *a,
-                                        const float *b,
-                                        float *c,
-                                        int M,
-                                        int N,
-                                        int K)
+                                   const float *b,
+                                   float *c,
+                                   int M,
+                                   int N,
+                                   int K)
 {
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
     using namespace nvcuda::wmma;
 
-    constexpr int WARPS_PER_BLOCK = 8; // 256 threads
+    constexpr int WARPS_PER_BLOCK = 16; // 512 threads
     constexpr int THREADS_PER_BLOCK = WARPS_PER_BLOCK * 32;
 
     __shared__ __align__(16) float sh_a[BM][BK];
@@ -37,20 +37,32 @@ __global__ void coarse_2d_tc_kernel(const float *a,
     const int block_m = static_cast<int>(blockIdx.y) * BM;
     const int block_n = static_cast<int>(blockIdx.x) * BN;
 
-    const int warp_m = warp_id / 2;               // 0..3
-    const int warp_n_base = (warp_id % 2) * 32;   // 0 or 32
+    // 128x128 C tile has 8x8 = 64 WMMA output fragments (each 16x16).
+    // Use 16 warps: 8 warps cover the M dimension (one warp per 16-row strip),
+    // and each strip has 2 warps that cover N in 2 groups of 4 fragments.
+    const int warp_m = warp_id / 2;               // 0..7
+    const int warp_n_group = warp_id % 2;         // 0..1
+    const int warp_n_base = warp_n_group * 64;    // 0 or 64
     const int m0 = warp_m * WMMA_M;
-    const int n0 = warp_n_base;
-    const int n1 = warp_n_base + WMMA_N;
+    const int n0 = warp_n_base + 0 * WMMA_N;
+    const int n1 = warp_n_base + 1 * WMMA_N;
+    const int n2 = warp_n_base + 2 * WMMA_N;
+    const int n3 = warp_n_base + 3 * WMMA_N;
 
     fragment<accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc0;
     fragment<accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc1;
+    fragment<accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc2;
+    fragment<accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc3;
     fill_fragment(acc0, 0.0f);
     fill_fragment(acc1, 0.0f);
+    fill_fragment(acc2, 0.0f);
+    fill_fragment(acc3, 0.0f);
 
     fragment<matrix_a, WMMA_M, WMMA_N, WMMA_K, precision::tf32, row_major> a_frag;
     fragment<matrix_b, WMMA_M, WMMA_N, WMMA_K, precision::tf32, col_major> b_frag0;
     fragment<matrix_b, WMMA_M, WMMA_N, WMMA_K, precision::tf32, col_major> b_frag1;
+    fragment<matrix_b, WMMA_M, WMMA_N, WMMA_K, precision::tf32, col_major> b_frag2;
+    fragment<matrix_b, WMMA_M, WMMA_N, WMMA_K, precision::tf32, col_major> b_frag3;
 
     for (int k0 = 0; k0 < K; k0 += BK) {
         const int a_elems = BM * BK;
@@ -76,16 +88,24 @@ __global__ void coarse_2d_tc_kernel(const float *a,
             load_matrix_sync(a_frag, &sh_a[m0][kk], BK);
             load_matrix_sync(b_frag0, &sh_b[n0][kk], BK);
             load_matrix_sync(b_frag1, &sh_b[n1][kk], BK);
+            load_matrix_sync(b_frag2, &sh_b[n2][kk], BK);
+            load_matrix_sync(b_frag3, &sh_b[n3][kk], BK);
             mma_sync(acc0, a_frag, b_frag0, acc0);
             mma_sync(acc1, a_frag, b_frag1, acc1);
+            mma_sync(acc2, a_frag, b_frag2, acc2);
+            mma_sync(acc3, a_frag, b_frag3, acc3);
         }
         __syncthreads();
     }
 
     float *c0 = c + (block_m + m0) * N + (block_n + n0);
     float *c1 = c + (block_m + m0) * N + (block_n + n1);
+    float *c2 = c + (block_m + m0) * N + (block_n + n2);
+    float *c3 = c + (block_m + m0) * N + (block_n + n3);
     store_matrix_sync(c0, acc0, N, mem_row_major);
     store_matrix_sync(c1, acc1, N, mem_row_major);
+    store_matrix_sync(c2, acc2, N, mem_row_major);
+    store_matrix_sync(c3, acc3, N, mem_row_major);
 #else
     (void)a;
     (void)b;
@@ -104,7 +124,7 @@ void coarse_2d_tc(float *a, float *b, float *c, int M, int N, int K)
         return;
     }
 
-    dim3 block(256);
+    dim3 block(512);
     dim3 grid(N / BN, M / BM);
     coarse_2d_tc_kernel<<<grid, block>>>(a, b, c, M, N, K);
 }

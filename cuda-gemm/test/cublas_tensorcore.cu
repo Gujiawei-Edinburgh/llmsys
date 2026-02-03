@@ -15,6 +15,7 @@ int main()
     const int sizes[] = {1024, 2048, 4096, 8192};
     cublasHandle_t handle;
     cublasCheck(cublasCreate(&handle));
+    cublasCheck(cublasSetMathMode(handle, CUBLAS_TF32_TENSOR_OP_MATH));
 
     for (int size : sizes) {
         const int rows = size;
@@ -39,6 +40,8 @@ int main()
 
         // Warm up to reduce first-call overhead (context init, module load).
         coarse_2d_tc(d_a.ptr, d_b.ptr, d_c_naive.ptr, rows, cols, kdim);
+        cudaCheck(cudaGetLastError());
+        cudaCheck(cudaDeviceSynchronize());
         const float alpha = 1.0f;
         const float beta = 0.0f;
         cublasCheck(cublasSgemm(handle,
@@ -64,6 +67,7 @@ int main()
         coarse_2d_tc(d_a.ptr, d_b.ptr, d_c_naive.ptr, rows, cols, kdim);
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
+        cudaCheck(cudaGetLastError());
         float naive_ms = 0.0f;
         cudaEventElapsedTime(&naive_ms, start, stop);
 
